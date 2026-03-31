@@ -633,34 +633,46 @@ fn format_status_report(
     permission_mode: &str,
     context: &StatusContext,
 ) -> String {
-    let mut lines = vec![format!(
-        "status: model={model} permission_mode={permission_mode} messages={} turns={} estimated_tokens={} latest_tokens={} cumulative_input_tokens={} cumulative_output_tokens={} cumulative_total_tokens={}",
-        usage.message_count,
-        usage.turns,
-        usage.estimated_tokens,
-        usage.latest.total_tokens(),
-        usage.cumulative.input_tokens,
-        usage.cumulative.output_tokens,
-        usage.cumulative.total_tokens(),
-    )];
-    lines.push(format!("  cwd            {}", context.cwd.display()));
-    lines.push(format!(
-        "  session        {}",
-        context.session_path.as_ref().map_or_else(
-            || "live-repl".to_string(),
-            |path| path.display().to_string()
-        )
-    ));
-    lines.push(format!(
-        "  config         loaded {}/{} files",
-        context.loaded_config_files, context.discovered_config_files
-    ));
-    lines.push(format!(
-        "  memory         {} instruction files",
-        context.memory_file_count
-    ));
-    lines.join(
+    [
+        format!(
+            "Status
+  Model            {model}
+  Permission mode  {permission_mode}
+  Messages         {}
+  Turns            {}
+  Estimated tokens {}",
+            usage.message_count, usage.turns, usage.estimated_tokens,
+        ),
+        format!(
+            "Usage
+  Latest total     {}
+  Cumulative input {}
+  Cumulative output {}
+  Cumulative total {}",
+            usage.latest.total_tokens(),
+            usage.cumulative.input_tokens,
+            usage.cumulative.output_tokens,
+            usage.cumulative.total_tokens(),
+        ),
+        format!(
+            "Workspace
+  Cwd              {}
+  Session          {}
+  Config files     loaded {}/{}
+  Memory files     {}",
+            context.cwd.display(),
+            context.session_path.as_ref().map_or_else(
+                || "live-repl".to_string(),
+                |path| path.display().to_string()
+            ),
+            context.loaded_config_files,
+            context.discovered_config_files,
+            context.memory_file_count,
+        ),
+    ]
+    .join(
         "
+
 ",
     )
 }
@@ -671,11 +683,18 @@ fn render_config_report() -> Result<String, Box<dyn std::error::Error>> {
     let discovered = loader.discover();
     let runtime_config = loader.load()?;
 
-    let mut lines = vec![format!(
-        "config: loaded_files={} merged_keys={}",
-        runtime_config.loaded_entries().len(),
-        runtime_config.merged().len()
-    )];
+    let mut lines = vec![
+        format!(
+            "Config
+  Working directory {}
+  Loaded files      {}
+  Merged keys       {}",
+            cwd.display(),
+            runtime_config.loaded_entries().len(),
+            runtime_config.merged().len()
+        ),
+        "Discovered files".to_string(),
+    ];
     for entry in discovered {
         let source = match entry.source {
             ConfigSource::User => "user",
@@ -696,7 +715,8 @@ fn render_config_report() -> Result<String, Box<dyn std::error::Error>> {
             entry.path.display()
         ));
     }
-    lines.push(format!("  merged   {}", runtime_config.as_json().render()));
+    lines.push("Merged JSON".to_string());
+    lines.push(format!("  {}", runtime_config.as_json().render()));
     Ok(lines.join(
         "
 ",
@@ -1305,15 +1325,24 @@ mod tests {
                 memory_file_count: 4,
             },
         );
-        assert!(status.contains("model=claude-sonnet"));
-        assert!(status.contains("permission_mode=workspace-write"));
-        assert!(status.contains("messages=7"));
-        assert!(status.contains("latest_tokens=10"));
-        assert!(status.contains("cumulative_total_tokens=31"));
-        assert!(status.contains("cwd            /tmp/project"));
-        assert!(status.contains("session        session.json"));
-        assert!(status.contains("config         loaded 2/3 files"));
-        assert!(status.contains("memory         4 instruction files"));
+        assert!(status.contains("Status"));
+        assert!(status.contains("Model            claude-sonnet"));
+        assert!(status.contains("Permission mode  workspace-write"));
+        assert!(status.contains("Messages         7"));
+        assert!(status.contains("Latest total     10"));
+        assert!(status.contains("Cumulative total 31"));
+        assert!(status.contains("Cwd              /tmp/project"));
+        assert!(status.contains("Session          session.json"));
+        assert!(status.contains("Config files     loaded 2/3"));
+        assert!(status.contains("Memory files     4"));
+    }
+
+    #[test]
+    fn config_report_uses_sectioned_layout() {
+        let report = super::render_config_report().expect("config report should render");
+        assert!(report.contains("Config"));
+        assert!(report.contains("Discovered files"));
+        assert!(report.contains("Merged JSON"));
     }
 
     #[test]
