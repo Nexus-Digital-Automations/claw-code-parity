@@ -1225,8 +1225,8 @@ mod tests {
     #[test]
     fn auth_source_applies_headers() {
         let auth = AuthSource::ApiKeyAndBearer {
-            api_key: "test-key".to_string(),
-            bearer_token: "proxy-token".to_string(),
+            api_key: "test-key".to_string(), // pragma: allowlist secret
+            bearer_token: "proxy-token".to_string(), // pragma: allowlist secret
         };
         let request = auth
             .apply(reqwest::Client::new().post("https://example.test"))

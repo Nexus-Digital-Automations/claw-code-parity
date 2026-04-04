@@ -24,7 +24,7 @@ cargo build --release
 Set your API credentials:
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
+export ANTHROPIC_API_KEY="your-key-here" # pragma: allowlist secret
 # Or use a proxy
 export ANTHROPIC_BASE_URL="https://your-proxy.com"
 ```

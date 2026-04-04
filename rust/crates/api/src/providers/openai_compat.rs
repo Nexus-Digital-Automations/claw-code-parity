@@ -38,7 +38,7 @@ impl OpenAiCompatConfig {
     pub const fn xai() -> Self {
         Self {
             provider_name: "xAI",
-            api_key_env: "XAI_API_KEY",
+            api_key_env: "XAI_API_KEY", // pragma: allowlist secret
             base_url_env: "XAI_BASE_URL",
             default_base_url: DEFAULT_XAI_BASE_URL,
         }
@@ -48,7 +48,7 @@ impl OpenAiCompatConfig {
     pub const fn openai() -> Self {
         Self {
             provider_name: "OpenAI",
-            api_key_env: "OPENAI_API_KEY",
+            api_key_env: "OPENAI_API_KEY", // pragma: allowlist secret
             base_url_env: "OPENAI_BASE_URL",
             default_base_url: DEFAULT_OPENAI_BASE_URL,
         }

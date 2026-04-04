@@ -366,7 +366,7 @@ fn write_credentials_root(path: &PathBuf, root: &Map<String, Value>) -> io::Resu
 }
 
 fn base64url_encode(bytes: &[u8]) -> String {
-    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"; // pragma: allowlist secret
     let mut output = String::new();
     let mut index = 0;
     while index + 3 <= bytes.len() {
@@ -486,8 +486,8 @@ mod tests {
     #[test]
     fn s256_challenge_matches_expected_vector() {
         assert_eq!(
-            code_challenge_s256("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
-            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+            code_challenge_s256("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), // pragma: allowlist secret
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM" // pragma: allowlist secret
         );
     }
 
