@@ -3,9 +3,9 @@ archive/
 .omx/
 .clawd-agents/
 # Claude Code local artifacts
-.claude/settings.local.json
-.claude/sessions/
-rust/.claude/sessions/
+.claude/
+rust/.claude/
+logs/
 
 # Sensitive file patterns
 .env
