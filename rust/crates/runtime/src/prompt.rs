@@ -140,6 +140,8 @@ impl SystemPromptBuilder {
         sections.push(get_simple_system_section());
         sections.push(get_simple_doing_tasks_section());
         sections.push(get_actions_section());
+        sections.push(get_engineering_standards_section());
+        sections.push(get_legibility_standards_section());
         sections.push(SYSTEM_PROMPT_DYNAMIC_BOUNDARY.to_string());
         sections.push(self.environment_section());
         if let Some(project_context) = &self.project_context {
@@ -510,6 +512,85 @@ fn get_actions_section() -> String {
         "Before taking any action, evaluate its reversibility and blast radius. Local, reversible actions (editing files, running tests) proceed without confirmation. Actions that are hard to reverse, affect shared state, or have broad blast radius REQUIRE explicit user authorization — do not proceed without it.\n\nActions that REQUIRE authorization before proceeding: deleting files or branches, force-pushing, hard resets, dropping database tables, killing processes, overwriting uncommitted changes, pushing code, creating or closing PRs, sending messages to external services, modifying shared infrastructure.\n\nNever use destructive actions to bypass obstacles. Fix the root cause. When in doubt, ask.".to_string(),
     ]
     .join("\n")
+}
+
+fn get_engineering_standards_section() -> String {
+    let mut lines = vec!["# Engineering Standards — mandatory".to_string()];
+
+    lines.push(String::new());
+    lines.push("## Agent Execution".to_string());
+    lines.extend(prepend_bullets(vec![
+        "Boy Scout: When modifying a file, leave it cleaner — fix adjacent broken windows (bad names, dead code) that you encounter.".to_string(),
+        "Design Twice: For complex features, evaluate at least 2 architectural approaches before writing implementation.".to_string(),
+        "Tracer Code: For large tasks, write an end-to-end skeleton first to validate architecture before filling in detail.".to_string(),
+    ]));
+
+    lines.push(String::new());
+    lines.push("## System Architecture & Boundaries".to_string());
+    lines.extend(prepend_bullets(vec![
+        "Dependency Rule: Source code dependencies MUST point inward toward business logic. UI, DB, and frameworks depend on core — never the reverse.".to_string(),
+        "Main Plugin: Entry points handle config and dependency injection, then hand off entirely to clean application policy. No business logic at the entry point.".to_string(),
+        "Humble Objects: Strip all business logic from UI and DB layers — leave them so thin they require no testing.".to_string(),
+        "No Pass-Throughs: Eliminate layers that consist only of delegation with no added abstraction value.".to_string(),
+        "DTOs at Boundaries: Cross architectural boundaries using Data Transfer Objects. Never expose core Business Entities to UI or DB layers.".to_string(),
+    ]));
+
+    lines.push(String::new());
+    lines.push("## Component & API Design".to_string());
+    lines.extend(prepend_bullets(vec![
+        "Deep Modules: Hide complex implementations behind simple, minimal APIs — pull complexity downward so callers don't manage it.".to_string(),
+        "Orthogonality: Components MUST be self-contained. Changing one must not ripple into another. Combine independent components to build complex behavior.".to_string(),
+        "Knowledge Encapsulation: Structure modules by what they *know*, not by chronological operation order. Avoid splitting single domain concepts across FileReader → DataModifier → FileWriter chains.".to_string(),
+        "Context over Pass-Throughs: Use a Context Object for request/session-scoped state instead of threading variables through 3+ call frames.".to_string(),
+    ]));
+
+    lines.push(String::new());
+    lines.push("## Code Generation & Readability".to_string());
+    lines.extend(prepend_bullets(vec![
+        "Newspaper Structure: High-level public functions at the top of every file; low-level private details unfold below. Most important things first.".to_string(),
+        "Intention-Revealing Names: Precise nouns for classes, strong verbs for methods. No encodings, abbreviations, or generic identifiers (data, manager, processor, handler, helper, util).".to_string(),
+        "Micro-Functions + CQS: One thing per function, one abstraction level, ~40 lines max. Commands change state OR return data — never both. No boolean flag arguments.".to_string(),
+        "Transformational Pipelines: Prefer pure data-transformation pipelines over state hoarded inside tightly coupled class hierarchies.".to_string(),
+        "Comment the Why: Comments explain business rules and algorithmic choices only — never restate what the code does mechanically.".to_string(),
+    ]));
+
+    lines.push(String::new());
+    lines.push("## Robustness & Error Handling".to_string());
+    lines.extend(prepend_bullets(vec![
+        "Illegal States Unrepresentable: Design type systems and APIs so invalid states cannot compile or occur at runtime.".to_string(),
+        "Crash Early: On invalid state, crash loudly rather than limping forward with corrupted data. Never suppress panics or exceptions silently.".to_string(),
+        "Reject Null: Never pass or return null/None as an error signal — use Optional, empty collection, or Special Case pattern instead.".to_string(),
+        "Exceptions over Codes: Throw/return errors explicitly; never return sentinel values or error codes on failure.".to_string(),
+        "No Shared Mutable State: Concurrency code uses actor models, immutable structures, or pure transformations. Sporadic failures indicate a threading defect — fix the root cause, never add a retry loop.".to_string(),
+    ]));
+
+    lines.push(String::new());
+    lines.push("## Validation & Testing".to_string());
+    lines.extend(prepend_bullets(vec![
+        "Red-Green-Refactor: Write the failing test first, then the minimal code to pass it, then refactor. Never write implementation before the test exists.".to_string(),
+        "F.I.R.S.T.: Tests MUST be Fast, Independent (no guaranteed order), Repeatable in any environment, Self-Validating (boolean pass/fail), and Timely (written with the code).".to_string(),
+        "State Coverage: Test boundary conditions, edge cases, and the properties/states data can reside in — not just lines of code.".to_string(),
+        "Design by Contract: Enforce and test preconditions (what must be true to execute) and postconditions (what is guaranteed on return) for all complex logic.".to_string(),
+    ]));
+
+    lines.join("\n")
+}
+
+fn get_legibility_standards_section() -> String {
+    let mut lines = vec!["# Code Legibility Standards — mandatory for all new and modified code".to_string()];
+
+    lines.extend(prepend_bullets(vec![
+        "Every new file MUST have an opening docstring/comment stating what it owns and what it does NOT own.".to_string(),
+        "Every public function with non-obvious failures MUST document: what it raises/returns on error, and any never-null guarantees.".to_string(),
+        "Every stateful class MUST include an ASCII comment diagram of valid state transitions.".to_string(),
+        "Every non-obvious architectural decision MUST have an inline decision record: WHY this approach, what was rejected, what would invalidate the decision.".to_string(),
+        "When a contract spans multiple files, add a cross-reference comment: `# Counterpart: see X` or `# Also updates Y`.".to_string(),
+        "Mark extension points and stability: `# EXTENSION POINT`, `# @stable`, `# @internal`, `# @deprecated prefer X`.".to_string(),
+        "Test names MUST be specifications: `test_raises_when_order_is_not_pending`, never `test_apply_discount`.".to_string(),
+        "Ubiquitous language: one concept = one name everywhere in the codebase. Never introduce a synonym for an existing domain term.".to_string(),
+    ]));
+
+    lines.join("\n")
 }
 
 #[cfg(test)]
