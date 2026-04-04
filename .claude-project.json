@@ -15,7 +15,7 @@
       "command_patterns": ["cargo test"],
       "pass_patterns": ["test result: ok"],
       "fail_patterns": ["FAILED", "failures:"],
-      "run_command": "cd rust && cargo test --workspace 2>&1"
+      "run_command": "cd rust && cargo test --workspace -- --test-threads=1 2>&1"
     },
     "upstream_sync": {
       "command_patterns": [],

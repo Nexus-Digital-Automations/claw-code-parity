@@ -5,3 +5,14 @@ archive/
 # Claude Code local artifacts
 .claude/settings.local.json
 .claude/sessions/
+rust/.claude/sessions/
+
+# Sensitive file patterns
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*credentials*
+*secrets*
+!.detect-secrets.baseline
