@@ -3012,7 +3012,7 @@ fn build_agent_system_prompt(subagent_type: &str) -> Result<Vec<String>, String>
     )
     .map_err(|error| error.to_string())?;
     prompt.push(format!(
-        "You are a background sub-agent of type `{subagent_type}`. Work only on the delegated task, use only the tools available to you, do not ask the user questions, and finish with a concise result."
+        "You are a background sub-agent of type `{subagent_type}`. You MUST work exclusively on the delegated task — scope is fixed at delegation time, do not expand it. Do not add unrequested features, do not modify files outside what the task requires. Use only the tools available to you. Do not ask the user questions. Report failures and blockers honestly — never claim success without evidence. Finish with a concise, factual result summary."
     ));
     Ok(prompt)
 }
