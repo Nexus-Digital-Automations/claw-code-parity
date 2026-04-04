@@ -1,0 +1,36 @@
+{
+  "project_type": "rust",
+  "has_tests": true,
+  "has_build": false,
+  "has_frontend": false,
+  "has_app": false,
+  "checks": {
+    "lint": {
+      "command_patterns": ["cargo clippy"],
+      "pass_patterns": [],
+      "fail_patterns": ["^error"],
+      "run_command": "cd rust && cargo clippy --workspace --all-targets 2>&1"
+    },
+    "tests": {
+      "command_patterns": ["cargo test"],
+      "pass_patterns": ["test result: ok"],
+      "fail_patterns": ["FAILED", "failures:"],
+      "run_command": "cd rust && cargo test --workspace 2>&1"
+    },
+    "upstream_sync": {
+      "command_patterns": [],
+      "pass_patterns": [],
+      "fail_patterns": []
+    },
+    "commit_push": {
+      "command_patterns": ["git push", "git commit"],
+      "pass_patterns": [],
+      "fail_patterns": []
+    },
+    "security": {
+      "command_patterns": [],
+      "pass_patterns": [],
+      "fail_patterns": []
+    }
+  }
+}
