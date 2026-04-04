@@ -139,6 +139,7 @@ impl SystemPromptBuilder {
         }
         sections.push(get_simple_system_section());
         sections.push(get_simple_doing_tasks_section());
+        sections.push(get_pre_execution_reasoning_section());
         sections.push(get_actions_section());
         sections.push(get_engineering_standards_section());
         sections.push(get_legibility_standards_section());
@@ -487,6 +488,10 @@ fn get_simple_doing_tasks_section() -> String {
         "When an approach fails, diagnose the root cause before switching tactics.".to_string(),
         "Never introduce security vulnerabilities (command injection, XSS, SQL injection, OWASP Top 10).".to_string(),
         "Report outcomes with actual command output. If verification was not run, say so explicitly.".to_string(),
+        "IDs MUST use `crypto.randomUUID()` (JS/TS) or `uuid.uuid4()` (Python). Never use `Date.now()` or `Math.random()` as IDs.".to_string(),
+        "Output files go in `output/`. Log files go in `logs/`. Never write generated output or logs to the project root.".to_string(),
+        "JS/TS projects: ESLint + TypeScript strict + Prettier enforced. 80-char lines. Semicolons. Single quotes.".to_string(),
+        "Python projects: Black + Ruff + mypy strict enforced. 88-char lines. snake_case files. PascalCase classes.".to_string(),
     ]));
 
     lines.push(String::new());
@@ -501,8 +506,32 @@ fn get_simple_doing_tasks_section() -> String {
         "Claim completion without running tests and showing actual output.".to_string(),
         "Commit secrets, API keys, tokens, .env files, or credentials.".to_string(),
         "Tell users to run commands that you are capable of running yourself.".to_string(),
+        "Edit `~/.claude/settings.json` without explicit plan approval.".to_string(),
+        "Implement backend code directly when in DeepSeek mode and the task touches 5+ backend files — delegate via the DeepSeek agent tool.".to_string(),
+        "Trust delegated output without reading every modified file and re-running build + tests yourself.".to_string(),
     ]));
 
+    lines.join("\n")
+}
+
+fn get_pre_execution_reasoning_section() -> String {
+    let mut lines =
+        vec!["# Pre-Execution Reasoning — required before any implementation".to_string()];
+    lines.push(String::new());
+    lines.push(
+        "Before writing any code or modifying files, reason through the following:".to_string(),
+    );
+    lines.extend(prepend_bullets(vec![
+        "Problem restatement: restate what was asked in your own words.".to_string(),
+        "Scope boundary: state explicitly what is NOT in scope for this task.".to_string(),
+        "Options: for complex tasks, evaluate at least 2 approaches before choosing one."
+            .to_string(),
+        "Assumptions: identify key assumptions and what happens if they are wrong.".to_string(),
+        "Minimum viable change: identify the smallest diff that satisfies the request.".to_string(),
+        "Pre-mortem: identify what could go wrong and how you will guard against it.".to_string(),
+    ]));
+    lines.push(String::new());
+    lines.push("This reasoning does not need to be exhaustive for trivial tasks (<10 lines changed), literal confirmations, or read-only operations. For substantial implementation, it must be present before the first tool call.".to_string());
     lines.join("\n")
 }
 
