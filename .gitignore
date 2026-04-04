@@ -6,6 +6,12 @@ archive/
 .claude/
 rust/.claude/
 logs/
+.validation-artifacts/
+rust/.validation-artifacts/
+architectural_decisions.json
+lessons.json
+rust/architectural_decisions.json
+rust/lessons.json
 
 # Sensitive file patterns
 .env
