@@ -28,6 +28,8 @@ pub enum ProviderKind {
     Anthropic,
     Xai,
     OpenAi,
+    DeepSeek,
+    Kimi,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,6 +113,51 @@ const MODEL_REGISTRY: &[(&str, ProviderMetadata)] = &[
             default_base_url: openai_compat::DEFAULT_XAI_BASE_URL,
         },
     ),
+    (
+        "deepseek",
+        ProviderMetadata {
+            provider: ProviderKind::DeepSeek,
+            auth_env: "DEEPSEEK_API_KEY",
+            base_url_env: "DEEPSEEK_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_DEEPSEEK_BASE_URL,
+        },
+    ),
+    (
+        "deepseek-chat",
+        ProviderMetadata {
+            provider: ProviderKind::DeepSeek,
+            auth_env: "DEEPSEEK_API_KEY",
+            base_url_env: "DEEPSEEK_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_DEEPSEEK_BASE_URL,
+        },
+    ),
+    (
+        "deepseek-reasoner",
+        ProviderMetadata {
+            provider: ProviderKind::DeepSeek,
+            auth_env: "DEEPSEEK_API_KEY",
+            base_url_env: "DEEPSEEK_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_DEEPSEEK_BASE_URL,
+        },
+    ),
+    (
+        "kimi",
+        ProviderMetadata {
+            provider: ProviderKind::Kimi,
+            auth_env: "KIMI_API_KEY",
+            base_url_env: "KIMI_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_KIMI_BASE_URL,
+        },
+    ),
+    (
+        "kimi-k2",
+        ProviderMetadata {
+            provider: ProviderKind::Kimi,
+            auth_env: "KIMI_API_KEY",
+            base_url_env: "KIMI_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_KIMI_BASE_URL,
+        },
+    ),
 ];
 
 #[must_use]
@@ -134,6 +181,15 @@ pub fn resolve_model_alias(model: &str) -> String {
                     _ => trimmed,
                 },
                 ProviderKind::OpenAi => trimmed,
+                ProviderKind::DeepSeek => match *alias {
+                    "deepseek" | "deepseek-chat" => "deepseek-chat",
+                    "deepseek-reasoner" => "deepseek-reasoner",
+                    _ => trimmed,
+                },
+                ProviderKind::Kimi => match *alias {
+                    "kimi" | "kimi-k2" => "kimi-k2",
+                    _ => trimmed,
+                },
             })
         })
         .map_or_else(|| trimmed.to_string(), ToOwned::to_owned)
@@ -158,6 +214,22 @@ pub fn metadata_for_model(model: &str) -> Option<ProviderMetadata> {
             default_base_url: openai_compat::DEFAULT_XAI_BASE_URL,
         });
     }
+    if canonical.starts_with("deepseek") {
+        return Some(ProviderMetadata {
+            provider: ProviderKind::DeepSeek,
+            auth_env: "DEEPSEEK_API_KEY",
+            base_url_env: "DEEPSEEK_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_DEEPSEEK_BASE_URL,
+        });
+    }
+    if canonical.starts_with("kimi") {
+        return Some(ProviderMetadata {
+            provider: ProviderKind::Kimi,
+            auth_env: "KIMI_API_KEY",
+            base_url_env: "KIMI_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_KIMI_BASE_URL,
+        });
+    }
     None
 }
 
@@ -168,6 +240,12 @@ pub fn detect_provider_kind(model: &str) -> ProviderKind {
     }
     if anthropic::has_auth_from_env_or_saved().unwrap_or(false) {
         return ProviderKind::Anthropic;
+    }
+    if openai_compat::has_api_key("DEEPSEEK_API_KEY") {
+        return ProviderKind::DeepSeek;
+    }
+    if openai_compat::has_api_key("KIMI_API_KEY") {
+        return ProviderKind::Kimi;
     }
     if openai_compat::has_api_key("OPENAI_API_KEY") {
         return ProviderKind::OpenAi;
