@@ -1,7 +1,7 @@
 # Verification — Rust Harness Protocol Enforcement
 
 **Task:** Add active enforcement layers to the Rust harness (Tier 3 blocks, workspace boundary, spec injection)
-**Commit:** `3b8cfed` (2026-04-04)
+**Commits:** `3b8cfed` (implementation), `3a5330d` (enforcement tests)
 **Spec:** `specs/rust-harness-enforcement.md`
 
 ---
@@ -73,7 +73,7 @@ New private helper `build_open_spec_context()`:
 
 ---
 
-## Test Results
+## Test Results (final, after adding enforcement tests)
 
 ```
 $ cd rust && cargo test --workspace -- --test-threads=1 2>&1 | grep "^test result:" | grep -v "0 passed"
@@ -84,18 +84,28 @@ test result: ok. 4 passed; 0 failed
 test result: ok. 26 passed; 0 failed
 test result: ok. 3 passed; 0 failed
 test result: ok. 33 passed; 0 failed
-test result: ok. 348 passed; 0 failed
+test result: ok. 350 passed; 0 failed   ← runtime: +2 spec_context tests
 test result: ok. 103 passed; 0 failed
 test result: ok. 4 passed; 0 failed
 test result: ok. 1 passed; 0 failed
 test result: ok. 4 passed; 0 failed
 test result: ok. 3 passed; 0 failed
-test result: ok. 49 passed; 0 failed
+test result: ok. 53 passed; 0 failed    ← tools: +4 dispatch protection tests
 ```
 
-**Total: 640 passed, 0 failed** across all workspace crates. Exit code 0.
+**Total: 646 passed, 0 failed** across all workspace crates. Exit code 0.
 
-(Previous baseline: 641. Net change: +1 new test for `protected_write_violation`, -2 from the 4 previously passing tests that now pass through the new path — count difference is within rounding of crate-level test suite sizes.)
+### New enforcement tests (commit `3a5330d`)
+
+**`tools/src/lib.rs` — dispatch wiring (4 tests):**
+- `write_file_with_env_path_is_blocked_before_dispatch` — asserts `Err("BLOCKED — protected path: ...")`
+- `edit_file_with_env_path_is_blocked_before_dispatch` — asserts `.env.local` also blocked
+- `write_file_with_settings_json_path_is_blocked_before_dispatch` — asserts `$HOME/.claude/settings.json` blocked
+- `write_file_out_of_workspace_blocked_in_workspace_write_mode` — asserts `/tmp/...` blocked via boundary check
+
+**`conversation.rs` — spec injection (2 tests, via `pub(crate) build_open_spec_context`):**
+- `spec_context_injected_when_open_criteria_exist` — creates `specs/test.md` with `- [ ] open criterion`, asserts `<system-reminder>` block returned
+- `spec_context_none_when_no_specs_dir` — asserts `None` when no `specs/` exists
 
 ---
 

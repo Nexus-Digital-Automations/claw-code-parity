@@ -33,7 +33,13 @@ Add active enforcement mechanisms to the Rust harness so that the agent cannot v
 - [x] `build_open_spec_context()` returns `None` when no `specs/` dir exists
 - [x] `build_open_spec_context()` returns `Some(...)` with `<system-reminder>` block when open criteria present
 - [x] Main CLI wires `with_spec_context_dir(cwd)` on runtime construction
-- [x] `cargo test --workspace` — 0 failures
+- [x] Test: `write_file` with `.env` path → `BLOCKED — protected path`
+- [x] Test: `edit_file` with `.env.local` path → `BLOCKED — protected path`
+- [x] Test: `write_file` with `$HOME/.claude/settings.json` → `BLOCKED — protected path`
+- [x] Test: `write_file` outside workspace in `WorkspaceWrite` mode → `BLOCKED — workspace boundary`
+- [x] Test: `build_open_spec_context()` with open spec → `<system-reminder>` block
+- [x] Test: `build_open_spec_context()` with no `specs/` dir → `None`
+- [x] `cargo test --workspace` — 0 failures (646 passed)
 - [x] `cargo clippy --workspace --all-targets` — exit 0
 
 ## Technical Decisions
