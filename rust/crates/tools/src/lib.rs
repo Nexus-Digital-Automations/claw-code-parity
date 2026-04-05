@@ -14,7 +14,7 @@ use runtime::{
     edit_file, execute_bash, glob_search, grep_search, load_system_prompt,
     lsp_client::LspRegistry,
     mcp_tool_bridge::McpToolRegistry,
-    permission_enforcer::{EnforcementResult, PermissionEnforcer},
+    permission_enforcer::{protected_write_violation, EnforcementResult, PermissionEnforcer},
     read_file,
     task_registry::TaskRegistry,
     team_cron_registry::{CronRegistry, TeamRegistry},
@@ -1136,10 +1136,48 @@ fn execute_tool_with_enforcer(
             from_value::<ReadFileInput>(input).and_then(run_read_file)
         }
         "write_file" => {
+            if let Some(path) = input.get("path").and_then(|v| v.as_str()) {
+                if let Some(reason) = protected_write_violation(path) {
+                    return Err(format!("BLOCKED — protected path: {reason}"));
+                }
+                // Workspace boundary only applies in WorkspaceWrite mode; other modes
+                // are handled by maybe_enforce_permission_check below.
+                if let Some(enf) = enforcer {
+                    if enf.active_mode() == PermissionMode::WorkspaceWrite {
+                        if let Ok(cwd) = std::env::current_dir() {
+                            let cwd_str = cwd.to_string_lossy();
+                            if let EnforcementResult::Denied { reason, .. } =
+                                enf.check_file_write(path, &cwd_str)
+                            {
+                                return Err(format!("BLOCKED — workspace boundary: {reason}"));
+                            }
+                        }
+                    }
+                }
+            }
             maybe_enforce_permission_check(enforcer, name, input)?;
             from_value::<WriteFileInput>(input).and_then(run_write_file)
         }
         "edit_file" => {
+            if let Some(path) = input.get("path").and_then(|v| v.as_str()) {
+                if let Some(reason) = protected_write_violation(path) {
+                    return Err(format!("BLOCKED — protected path: {reason}"));
+                }
+                // Workspace boundary only applies in WorkspaceWrite mode; other modes
+                // are handled by maybe_enforce_permission_check below.
+                if let Some(enf) = enforcer {
+                    if enf.active_mode() == PermissionMode::WorkspaceWrite {
+                        if let Ok(cwd) = std::env::current_dir() {
+                            let cwd_str = cwd.to_string_lossy();
+                            if let EnforcementResult::Denied { reason, .. } =
+                                enf.check_file_write(path, &cwd_str)
+                            {
+                                return Err(format!("BLOCKED — workspace boundary: {reason}"));
+                            }
+                        }
+                    }
+                }
+            }
             maybe_enforce_permission_check(enforcer, name, input)?;
             from_value::<EditFileInput>(input).and_then(run_edit_file)
         }

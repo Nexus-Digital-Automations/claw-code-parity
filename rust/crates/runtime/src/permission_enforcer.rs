@@ -232,6 +232,38 @@ fn is_read_only_command(command: &str) -> bool {
         && !command.contains(" >> ")
 }
 
+/// Returns a blocking reason if `path` points to a protected file that must
+/// never be written by the agent. Hard-blocks `.env` files (contain secrets)
+/// and `~/.claude/settings.json` (requires explicit plan approval).
+pub fn protected_write_violation(path: &str) -> Option<&'static str> {
+    let file_name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    if file_name == ".env"
+        || file_name.starts_with(".env.")
+        || file_name.ends_with(".env")
+    {
+        return Some(".env files contain secrets and must never be written by the agent");
+    }
+
+    if let Ok(home) = std::env::var("HOME") {
+        let settings = format!("{home}/.claude/settings.json");
+        let canon = std::path::Path::new(path)
+            .canonicalize()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| path.to_string());
+        if canon == settings || path == settings {
+            return Some(
+                "~/.claude/settings.json requires explicit plan approval before editing",
+            );
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -542,5 +574,23 @@ mod tests {
             }
             other => panic!("expected denied result, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn protected_write_violation_blocks_env_and_settings() {
+        // .env exact match
+        assert!(protected_write_violation(".env").is_some());
+        // .env.local prefix variant
+        assert!(protected_write_violation("/project/.env.local").is_some());
+        // .env suffix variant
+        assert!(protected_write_violation("/project/production.env").is_some());
+        // ~/.claude/settings.json by literal path
+        if let Ok(home) = std::env::var("HOME") {
+            let settings_path = format!("{home}/.claude/settings.json");
+            assert!(protected_write_violation(&settings_path).is_some());
+        }
+        // safe paths are not blocked
+        assert!(protected_write_violation("/project/src/main.rs").is_none());
+        assert!(protected_write_violation("/project/config.json").is_none());
     }
 }

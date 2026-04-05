@@ -4328,6 +4328,9 @@ fn build_runtime_with_plugin_state(
     if emit_output {
         runtime = runtime.with_hook_progress_reporter(Box::new(CliHookProgressReporter));
     }
+    if let Ok(cwd) = std::env::current_dir() {
+        runtime = runtime.with_spec_context_dir(cwd);
+    }
     Ok(BuiltRuntime::new(runtime, plugin_registry, mcp_state))
 }
 

@@ -126,6 +126,7 @@ pub struct ConversationRuntime<C, T> {
     hook_abort_signal: HookAbortSignal,
     hook_progress_reporter: Option<Box<dyn HookProgressReporter>>,
     session_tracer: Option<SessionTracer>,
+    spec_context_dir: Option<std::path::PathBuf>,
 }
 
 impl<C, T> ConversationRuntime<C, T>
@@ -175,6 +176,7 @@ where
             hook_abort_signal: HookAbortSignal::default(),
             hook_progress_reporter: None,
             session_tracer: None,
+            spec_context_dir: None,
         }
     }
 
@@ -208,6 +210,12 @@ where
     #[must_use]
     pub fn with_session_tracer(mut self, session_tracer: SessionTracer) -> Self {
         self.session_tracer = Some(session_tracer);
+        self
+    }
+
+    #[must_use]
+    pub fn with_spec_context_dir(mut self, dir: std::path::PathBuf) -> Self {
+        self.spec_context_dir = Some(dir);
         self
     }
 
@@ -282,6 +290,45 @@ where
         }
     }
 
+    /// Scans `specs/*.md` in the working directory for open acceptance criteria
+    /// (`- [ ]` lines) and returns a `<system-reminder>` block to prepend to the
+    /// user input, or `None` when there are no open criteria or no `specs/` dir.
+    fn build_open_spec_context(&self) -> Option<String> {
+        let dir = self.spec_context_dir.as_ref()?;
+        let specs_dir = dir.join("specs");
+        let entries = std::fs::read_dir(&specs_dir).ok()?;
+
+        let mut open_specs: Vec<String> = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                continue;
+            }
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let open: Vec<&str> = content
+                .lines()
+                .filter(|l| l.trim_start().starts_with("- [ ]"))
+                .collect();
+            if !open.is_empty() {
+                let file_name = path.file_name()?.to_string_lossy().into_owned();
+                let criteria = open.join("\n");
+                open_specs.push(format!("specs/{file_name}:\n{criteria}"));
+            }
+        }
+
+        if open_specs.is_empty() {
+            return None;
+        }
+
+        Some(format!(
+            "<system-reminder>\nOpen spec acceptance criteria (must be satisfied before stopping):\n\n{}\n</system-reminder>",
+            open_specs.join("\n\n")
+        ))
+    }
+
     #[allow(clippy::too_many_lines)]
     pub fn run_turn(
         &mut self,
@@ -290,8 +337,12 @@ where
     ) -> Result<TurnSummary, RuntimeError> {
         let user_input = user_input.into();
         self.record_turn_started(&user_input);
+        let user_input_with_context = match self.build_open_spec_context() {
+            Some(ctx) => format!("{ctx}\n\n{user_input}"),
+            None => user_input,
+        };
         self.session
-            .push_user_text(user_input)
+            .push_user_text(user_input_with_context)
             .map_err(|error| RuntimeError::new(error.to_string()))?;
 
         let mut assistant_messages = Vec::new();
