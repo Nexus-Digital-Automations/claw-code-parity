@@ -293,7 +293,7 @@ where
     /// Scans `specs/*.md` in the working directory for open acceptance criteria
     /// (`- [ ]` lines) and returns a `<system-reminder>` block to prepend to the
     /// user input, or `None` when there are no open criteria or no `specs/` dir.
-    fn build_open_spec_context(&self) -> Option<String> {
+    pub(crate) fn build_open_spec_context(&self) -> Option<String> {
         let dir = self.spec_context_dir.as_ref()?;
         let specs_dir = dir.join("specs");
         let entries = std::fs::read_dir(&specs_dir).ok()?;
@@ -1725,5 +1725,73 @@ mod tests {
 
         // then
         assert_eq!(error.to_string(), "upstream failed");
+    }
+
+    struct NoopApi;
+    impl ApiClient for NoopApi {
+        fn stream(&mut self, _: ApiRequest) -> Result<Vec<AssistantEvent>, RuntimeError> {
+            Ok(vec![])
+        }
+    }
+
+    #[test]
+    fn spec_context_injected_when_open_criteria_exist() {
+        let dir = std::env::temp_dir().join(format!(
+            "spec-inject-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .subsec_nanos()
+        ));
+        let specs_dir = dir.join("specs");
+        fs::create_dir_all(&specs_dir).expect("create specs dir");
+        fs::write(
+            specs_dir.join("test.md"),
+            "# Spec\n- [x] done criterion\n- [ ] open criterion\n",
+        )
+        .expect("write spec file");
+
+        let runtime = ConversationRuntime::new(
+            Session::new(),
+            NoopApi,
+            StaticToolExecutor::new(),
+            PermissionPolicy::new(PermissionMode::DangerFullAccess),
+            vec![],
+        )
+        .with_spec_context_dir(dir.clone());
+
+        let ctx = runtime.build_open_spec_context();
+        assert!(ctx.is_some(), "should produce context when open criteria exist");
+        let ctx_str = ctx.unwrap();
+        assert!(ctx_str.contains("<system-reminder>"), "should wrap in system-reminder");
+        assert!(ctx_str.contains("open criterion"), "should include open criterion");
+        assert!(!ctx_str.contains("done criterion"), "should not include checked criterion");
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn spec_context_none_when_no_specs_dir() {
+        let dir = std::env::temp_dir().join(format!(
+            "spec-inject-empty-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .subsec_nanos()
+        ));
+        fs::create_dir_all(&dir).expect("create dir");
+        // No specs/ subdirectory
+
+        let runtime = ConversationRuntime::new(
+            Session::new(),
+            NoopApi,
+            StaticToolExecutor::new(),
+            PermissionPolicy::new(PermissionMode::DangerFullAccess),
+            vec![],
+        )
+        .with_spec_context_dir(dir.clone());
+
+        assert!(runtime.build_open_spec_context().is_none(), "no specs dir → None");
+        let _ = fs::remove_dir_all(dir);
     }
 }

@@ -6759,6 +6759,74 @@ printf 'pwsh:%s' "$1"
         assert_eq!(output["stdout"], "ok");
     }
 
+    #[test]
+    fn write_file_with_env_path_is_blocked_before_dispatch() {
+        // No enforcer needed — protected_write_violation fires unconditionally.
+        let err = super::execute_tool(
+            "write_file",
+            &json!({ "path": "/project/.env", "content": "SECRET=x" }),
+        )
+        .expect_err("write to .env must be blocked");
+        assert!(
+            err.contains("BLOCKED") && err.contains("protected path"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn edit_file_with_env_path_is_blocked_before_dispatch() {
+        let err = super::execute_tool(
+            "edit_file",
+            &json!({ "path": "/project/.env.local", "old_string": "a", "new_string": "b" }),
+        )
+        .expect_err("edit to .env.local must be blocked");
+        assert!(
+            err.contains("BLOCKED") && err.contains("protected path"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn write_file_with_settings_json_path_is_blocked_before_dispatch() {
+        if let Ok(home) = std::env::var("HOME") {
+            let settings = format!("{home}/.claude/settings.json");
+            let err = super::execute_tool(
+                "write_file",
+                &json!({ "path": settings, "content": "{}" }),
+            )
+            .expect_err("write to settings.json must be blocked");
+            assert!(
+                err.contains("BLOCKED") && err.contains("protected path"),
+                "unexpected error: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn write_file_out_of_workspace_blocked_in_workspace_write_mode() {
+        use runtime::permission_enforcer::PermissionEnforcer;
+        use runtime::PermissionMode;
+        // Build a WorkspaceWrite enforcer
+        let policy = mvp_tool_specs().into_iter().fold(
+            PermissionPolicy::new(PermissionMode::WorkspaceWrite),
+            |p, spec| p.with_tool_requirement(spec.name, spec.required_permission),
+        );
+        let mut registry = super::GlobalToolRegistry::builtin();
+        registry.set_enforcer(PermissionEnforcer::new(policy));
+
+        // /tmp is outside any workspace root derived from cwd
+        let err = registry
+            .execute(
+                "write_file",
+                &json!({ "path": "/tmp/outside-workspace.txt", "content": "x" }),
+            )
+            .expect_err("write outside workspace must be blocked in workspace-write mode");
+        assert!(
+            err.contains("BLOCKED") && err.contains("workspace boundary"),
+            "unexpected error: {err}"
+        );
+    }
+
     struct TestServer {
         addr: SocketAddr,
         shutdown: Option<std::sync::mpsc::Sender<()>>,
