@@ -1,5 +1,7 @@
 __pycache__/
 archive/
+.DS_Store
+**/.DS_Store
 .omx/
 .clawd-agents/
 # Claude Code local artifacts
