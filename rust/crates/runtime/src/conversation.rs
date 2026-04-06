@@ -339,6 +339,72 @@ where
         ))
     }
 
+    /// Writes per-turn tracking files to `~/.claude/data/`:
+    /// - `user_requests_{session_id}.json` — appended JSON array of prompts
+    /// - `current_task_{session_id}.json` — current task state
+    fn write_turn_data(&self, prompt: &str) {
+        let Ok(home) = std::env::var("HOME") else {
+            return;
+        };
+        let data_dir = std::path::Path::new(&home).join(".claude/data");
+        let _ = std::fs::create_dir_all(&data_dir);
+        let sid = &self.session.session_id;
+
+        static TURN_COUNTER: std::sync::atomic::AtomicU64 =
+            std::sync::atomic::AtomicU64::new(0);
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let count =
+            TURN_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let task_id = format!("task-{millis:016x}-{count:04x}");
+        let prompt_id = format!("prompt-{millis:016x}-{count:04x}");
+        let cwd = std::env::current_dir()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let truncated = &prompt[..prompt.len().min(500)];
+
+        let req_path = data_dir.join(format!("user_requests_{sid}.json"));
+        let mut entries: Vec<serde_json::Value> = req_path
+            .exists()
+            .then(|| std::fs::read_to_string(&req_path).ok())
+            .flatten()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+        let is_followup = !entries.is_empty();
+        entries.push(serde_json::json!({
+            "prompt": truncated,
+            "timestamp": millis.to_string(),
+            "task_id": &task_id,
+            "prompt_id": &prompt_id,
+        }));
+        let _ = std::fs::write(
+            &req_path,
+            serde_json::to_string_pretty(&entries).unwrap_or_default(),
+        );
+
+        let task_path = data_dir.join(format!("current_task_{sid}.json"));
+        let _ = std::fs::write(
+            &task_path,
+            serde_json::to_string_pretty(&serde_json::json!({
+                "task_id": &task_id,
+                "prompt_id": &prompt_id,
+                "session_id": sid,
+                "working_dir": &cwd,
+                "task_started_at": millis.to_string(),
+                "prompt": truncated,
+                "is_followup": is_followup,
+            }))
+            .unwrap_or_default(),
+        );
+    }
+
+    /// Fires the configured Stop hooks. Best-effort — never blocks the caller.
+    pub fn run_stop_hook(&self) {
+        self.hook_runner.run_stop(&self.session.session_id);
+    }
+
     #[allow(clippy::too_many_lines)]
     pub fn run_turn(
         &mut self,
@@ -346,6 +412,7 @@ where
         mut prompter: Option<&mut dyn PermissionPrompter>,
     ) -> Result<TurnSummary, RuntimeError> {
         let user_input = user_input.into();
+        self.write_turn_data(&user_input);
         self.record_turn_started(&user_input);
         let user_input_with_context = match self.build_open_spec_context() {
             Some(ctx) => format!("{ctx}\n\n{user_input}"),
@@ -1805,5 +1872,18 @@ mod tests {
 
         assert!(runtime.build_open_spec_context().is_none(), "no specs dir → None");
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn run_stop_hook_is_noop_when_no_stop_commands_configured() {
+        // No stop hooks configured — must not panic
+        let runtime = ConversationRuntime::new(
+            Session::new(),
+            NoopApi,
+            StaticToolExecutor::new(),
+            PermissionPolicy::new(PermissionMode::DangerFullAccess),
+            vec![],
+        );
+        runtime.run_stop_hook(); // should complete without panic
     }
 }

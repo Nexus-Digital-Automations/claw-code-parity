@@ -1,0 +1,80 @@
+RUST HARNESS SESSION LIFECYCLE — VERIFICATION RECORD
+=====================================================
+Task: Close 4 session lifecycle gaps:
+      1. No stop hook trigger
+      2. user_requests_{session_id}.json not written
+      3. current_task_{session_id}.json not written
+      4. agent_mode.json not written at startup
+Spec: specs/rust-harness-session-lifecycle.md
+User request: "please fix these gaps" (session c5e018fc-96c3-4e7d-acdc-e15b07d525b4)
+
+SPEC-BEFORE-CODE EVIDENCE
+--------------------------
+Plan file: ~/.claude/plans/fluttering-dancing-haven.md (updated for this task)
+Plan approved via ExitPlanMode before any code was written.
+Plan approval predates all commits in this task.
+
+WHAT WAS IMPLEMENTED
+--------------------
+1. config.rs — RuntimeHookConfig gets stop: Vec<String> field
+   - stop() accessor returns configured stop commands
+   - with_stop() builder sets the stop list
+   - parse_optional_hooks_config_object() reads "Stop" key from settings.json
+   - extend() includes stop in merge logic
+
+2. hooks.rs — HookEvent::Stop variant + HookRunner::run_stop()
+   - HookEvent::Stop with as_str() → "Stop"
+   - run_stop(session_id) fires each configured stop command via stdin JSON:
+     {"hook_event_name":"Stop","session_id":"...","stop_hook_active":true}
+   - Best-effort: ignores exit codes and errors, never blocks session end
+
+3. conversation.rs — write_turn_data() + run_stop_hook()
+   - write_turn_data() called at start of run_turn():
+     * Appends {prompt, timestamp, task_id, prompt_id} to user_requests_{sid}.json
+     * Writes current_task_{sid}.json with task_id, prompt_id, session_id,
+       working_dir, task_started_at, prompt, is_followup
+   - run_stop_hook() delegates to hook_runner.run_stop(session_id)
+
+4. main.rs — write_agent_mode_if_absent() + LiveCli::run_stop_hook()
+   - write_agent_mode_if_absent(): writes {"mode": "claw"} if file absent (no-op if exists)
+   - Called before REPL loop in run_repl()
+   - LiveCli::run_stop_hook() calls self.runtime.run_stop_hook()
+   - Wired at both exit points: /exit|/quit and ReadOutcome::Exit
+
+NEW TESTS
+---------
+hooks.rs:
+  run_stop_runs_configured_command        PASS (shell cmd writes temp file)
+  run_stop_is_noop_when_no_stop_commands_configured  PASS
+
+conversation.rs:
+  run_stop_hook_is_noop_when_no_stop_hooks_configured  PASS
+
+config.rs:
+  hook_config_merge_preserves_uniques (updated to verify stop field)  PASS
+
+TEST RESULTS (cargo test --workspace -- --test-threads=1)
+----------------------------------------------------------
+TOTAL: 712 passed, 0 failed. Exit code 0.
+
+LINT RESULTS (cargo clippy --workspace --all-targets)
+-----------------------------------------------------
+Exit code: 0
+Errors: 0
+
+ACCEPTANCE CRITERIA STATUS
+--------------------------
+[x] HookEvent::Stop variant with as_str() → "Stop"
+[x] RuntimeHookConfig::stop() accessor
+[x] RuntimeHookConfig::with_stop() builder
+[x] Stop parsed from settings.json hooks.Stop key
+[x] HookRunner::run_stop(session_id) fires commands with JSON payload
+[x] run_stop noop when no commands configured (tested)
+[x] ConversationRuntime::run_stop_hook() delegates to hook runner
+[x] Stop hook wired at /exit, /quit, and ReadOutcome::Exit in run_repl()
+[x] write_turn_data() appends to user_requests_{sid}.json per turn
+[x] write_turn_data() writes current_task_{sid}.json per turn
+[x] write_agent_mode_if_absent() bootstraps mode file if absent
+[x] write_agent_mode_if_absent() no-op if file exists
+[x] cargo test --workspace — 0 failures (712 passed)
+[x] cargo clippy --workspace --all-targets — exit 0

@@ -20,6 +20,7 @@ pub enum HookEvent {
     PreToolUse,
     PostToolUse,
     PostToolUseFailure,
+    Stop,
 }
 
 impl HookEvent {
@@ -29,6 +30,7 @@ impl HookEvent {
             Self::PreToolUse => "PreToolUse",
             Self::PostToolUse => "PostToolUse",
             Self::PostToolUseFailure => "PostToolUseFailure",
+            Self::Stop => "Stop",
         }
     }
 }
@@ -304,6 +306,28 @@ impl HookRunner {
             abort_signal,
             None,
         )
+    }
+
+    /// Fires configured Stop commands when the session ends.
+    /// Best-effort: ignores errors and never blocks the exit.
+    pub fn run_stop(&self, session_id: &str) {
+        if self.config.stop().is_empty() {
+            return;
+        }
+        let payload = json!({
+            "hook_event_name": HookEvent::Stop.as_str(),
+            "session_id": session_id,
+            "stop_hook_active": true,
+        })
+        .to_string();
+        for command in self.config.stop() {
+            let mut child = shell_command(command);
+            child.stdin(Stdio::piped());
+            child.stdout(Stdio::piped());
+            child.stderr(Stdio::piped());
+            child.env("HOOK_EVENT", HookEvent::Stop.as_str());
+            let _ = child.output_with_stdin(payload.as_bytes(), None);
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -973,6 +997,31 @@ mod tests {
                 ..
             }
         )));
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn run_stop_runs_configured_command() {
+        // given
+        let tmp = std::env::temp_dir().join(format!("hook-stop-test-{}", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()));
+        let tmp_str = tmp.display().to_string();
+        let config = RuntimeHookConfig::new(Vec::new(), Vec::new(), Vec::new())
+            .with_stop(vec![shell_snippet(&format!("touch '{tmp_str}'"))]);
+        let runner = HookRunner::new(config);
+
+        // when
+        runner.run_stop("test-session-id");
+
+        // then
+        assert!(tmp.exists(), "stop hook should have created the temp file");
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn run_stop_is_noop_when_no_stop_commands_configured() {
+        let runner = HookRunner::new(RuntimeHookConfig::new(Vec::new(), Vec::new(), Vec::new()));
+        runner.run_stop("session-id"); // must not panic
     }
 
     #[cfg(windows)]

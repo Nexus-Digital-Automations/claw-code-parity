@@ -1744,11 +1744,25 @@ fn run_resume_command(
     }
 }
 
+/// Writes `{"mode": "claw"}` to `~/.claude/data/agent_mode.json` if the file
+/// does not already exist. Never errors — only runs at startup to bootstrap
+/// the file for environments where the Python hooks have not yet created it.
+fn write_agent_mode_if_absent() {
+    let Ok(home) = std::env::var("HOME") else {
+        return;
+    };
+    let mode_path = std::path::Path::new(&home).join(".claude/data/agent_mode.json");
+    if !mode_path.exists() {
+        let _ = std::fs::write(&mode_path, "{\"mode\": \"claw\"}\n");
+    }
+}
+
 fn run_repl(
     model: String,
     allowed_tools: Option<AllowedToolSet>,
     permission_mode: PermissionMode,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    write_agent_mode_if_absent();
     let mut cli = LiveCli::new(model, true, allowed_tools, permission_mode)?;
     let mut editor =
         input::LineEditor::new("> ", cli.repl_completion_candidates().unwrap_or_default());
@@ -1764,6 +1778,7 @@ fn run_repl(
                 }
                 if matches!(trimmed.as_str(), "/exit" | "/quit") {
                     cli.persist_session()?;
+                    cli.run_stop_hook();
                     break;
                 }
                 match SlashCommand::parse(&trimmed) {
@@ -1785,6 +1800,7 @@ fn run_repl(
             input::ReadOutcome::Cancel => {}
             input::ReadOutcome::Exit => {
                 cli.persist_session()?;
+                cli.run_stop_hook();
                 break;
             }
         }
@@ -2661,6 +2677,10 @@ impl LiveCli {
     fn persist_session(&self) -> Result<(), Box<dyn std::error::Error>> {
         self.runtime.session().save_to_path(&self.session.path)?;
         Ok(())
+    }
+
+    fn run_stop_hook(&self) {
+        self.runtime.run_stop_hook();
     }
 
     fn print_status(&self) {
